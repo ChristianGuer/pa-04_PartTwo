@@ -147,6 +147,28 @@ int main ( int argc , char * argv[] )
     BANNER( log ) ;
     fprintf( log , "         MSG5 Receive\n");
     BANNER( log ) ;
+    Nonce_t expectedfNb;
+    Nonce_t rcvdfNb;
+    fNonce( expectedfNb , Nb );   // <-- result first, input second
+    
+    fprintf( log , "Basim is expecting back this f( Nb ) in MSG5:\n" );
+    BIO_dump_indent_fp( log , (const char *)expectedfNb , NONCELEN , 4 );
+    fprintf( log , "\n" );
+
+    MSG5_receive( log, fd_A2B, &Ks, &rcvdfNb );
+
+    // Compare byte-for-byte
+    if( memcmp( rcvdfNb , expectedfNb , NONCELEN ) == 0 )
+    {
+        fprintf( log , "Amal returned the following f( Nb )   >>>> VALID\n" );
+    }
+    else
+    {
+        fprintf( log , "Amal returned the following f( Nb2 )   >>>> FAILED\n" );
+    }
+    BIO_dump_indent_fp( log , (const char *)rcvdfNb , NONCELEN , 4 );
+    fprintf( log , "\n" );
+    fflush( log );
 
     //*************************************   
     // Final Clean-Up

@@ -217,7 +217,7 @@ int main ( int argc , char * argv[] )
         }
         off += (size_t)n;
     }
-    fprintf( log , "Amal Sent Message 3 ( %lu bytes ) to Basim\n\n" , lenMsg3 ) ;
+    fprintf( log , "Amal Sent the Message 3 ( %lu bytes ) to Basim\n\n" , lenMsg3 ) ;
     fflush( log ) ;
     //*************************************
     // Receive   & Process Message 4
@@ -262,7 +262,24 @@ int main ( int argc , char * argv[] )
     BANNER( log ) ;
     fprintf( log , "         MSG5 New\n");
     BANNER( log ) ;
-
+    Nonce_t fNb;          // Basim's nonce
+    fNonce( fNb , Nb );   // r = n + 1 (big-endian)
+    size_t   LenMsg5 ;
+    uint8_t *msg5 ;
+    LenMsg5 = MSG5_new( log , &msg5 , &Ks , &fNb ) ;
+    // Send MSG5 to Basim via the appropriate pipe
+    off = 0 ;
+    p = msg5 ;
+    while ( off < LenMsg5 ) {
+        ssize_t n = write( fd_A2B, p + off, LenMsg5 - off );
+        if ( n < 0 ) {
+            fprintf( log , "Amal: Unable to send all %lu bytes of MSG5 to Basim ... EXITING\n" , LenMsg5 );
+            fflush( log ) ;  fclose( log ) ;   
+            exitError( "Amal: Unable to send all bytes of MSG5 to Basim" );
+        }
+        off += (size_t)n;
+    }
+    fprintf( log , "Amal sent Message 5 ( %lu bytes ) to Basim\n", LenMsg5 ) ;
 
     //*************************************   
     // Final Clean-Up

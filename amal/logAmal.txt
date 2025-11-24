@@ -80,26 +80,9 @@ The following MSG3 ( 92 bytes ) has been created by MSG3_new ():
     0040 - 38 9b 63 16 08 22 26 3e-7e 1b 2f f3 55 b5 a7 54   8.c.."&>~./.U..T
     0050 - 26 35 a1 2a 02 06 1b de-dd cc bb aa               &5.*........
 
-Amal sent message 3 ( 92 bytes ) to Basim
+Amal Sent the Message 3 ( 92 bytes ) to Basim
 
 ***************************************************
          MSG4 Receive
 ***************************************************
-The following Encrypted MSG4 ( 16 bytes ) was received:
-    0000 - e3 39 ea e1 38 6b 50 8d-42 25 dc 41 18 8f 2b 37   .9..8kP.B%.A..+7
-
-
-Amal is expecting back this f( Na2 ) in MSG4:
-    0000 - dd cc bb ab                                       ....
-
-Basim returned the following f( Na2 )   >>>> VALID
-    0000 - dd cc bb ab                                       ....
-
-Amal also received this Nb :
-    0000 - 99 88 77 66                                       ..wf
-
-***************************************************
-         MSG5 New
-***************************************************
-
-Amal has terminated normally. Goodbye
+Ciphertext too big 10182756649537255907 bytes( max is 2048 ) in MSG4_receive() ... EXITING

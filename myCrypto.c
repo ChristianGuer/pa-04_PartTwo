@@ -1287,7 +1287,6 @@ void MSG4_receive( FILE *log , int fd ,
     // No extra logging here – Amal.c will log expected f(Na2),
     // compare it to rcvd_fNa2, and dump Nb just like in the expected log.
 }
-
 //-----------------------------------------------------------------------------
 // Build a new Message #5 from Amal to Basim
 // A new buffer for *msg5 is allocated here
@@ -1295,86 +1294,165 @@ void MSG4_receive( FILE *log , int fd ,
 // All other arguments have been initialized by caller
 // Returns the size of Message #5  in bytes
 
-size_t  MSG5_new( FILE *log , uint8_t **msg5, const myKey_t *Ks ,  Nonce_t *fNb )
+size_t MSG5_new( FILE *log , uint8_t **msg5 , const myKey_t *Ks , Nonce_t *fNb )
 {
-    // size_t  LenMSG5cipher  ;
-
-    // Construct MSG5 Plaintext  = {  f(Nb)  }
-    // Use the global scratch buffer plaintext[] for MSG5 plaintext. Make sure it fits 
-
-
-    // Now, encrypt( Ks , {plaintext} );
-    // Use the global scratch buffer ciphertext[] to collect result. Make sure it fits.
-
-
-    // Now allocate a buffer for the caller, and copy the encrypted MSG5 to it
-    // *msg5 = malloc( ... ) ;
-
-
-    // fprintf( log , "The following Encrypted MSG5 ( %lu bytes ) has been"
-    //                " created by MSG5_new ():  \n" , LenMSG5cipher ) ;
-    // BIO_dump_indent_fp( log , *msg5 , LenMSG5cipher , 4 ) ;    fprintf( log , "\n" ) ;    
-    // fflush( log ) ;    
-
-    // return LenMSG5cipher ;
-
-    // *** TEMP STUB ***
-    (void)Ks;
-    (void)fNb;
-
-    if (msg5) {
-        *msg5 = NULL;
+    // Guard against NULL pointers
+    if( log == NULL || msg5 == NULL || Ks == NULL || fNb == NULL )
+    {
+        if( log )
+            fprintf( log , "NULL pointer argument passed to MSG5_new()\n" );
+        exitError( "NULL pointer argument passed to MSG5_new()" );
     }
 
-    if (log) {
-        fprintf(log,
-                "MSG5_new() STUB CALLED – not implemented yet (ignored for MSG2 tests).\n");
-        fflush(log);
+    //--------------------------------------------------------------------------
+    // 1) Construct MSG5 plaintext = { f(Nb) } in global plaintext[]
+    //--------------------------------------------------------------------------
+    if( NONCELEN > PLAINTEXT_LEN_MAX )
+    {
+        fprintf( log ,
+                 "Nonce length %lu exceeds PLAINTEXT_LEN_MAX (%d) in MSG5_new()\n",
+                 (unsigned long)NONCELEN , PLAINTEXT_LEN_MAX );
+        fflush( log );  fclose( log );
+        exitError( "Nonce too large in MSG5_new()" );
     }
 
-    return 0;
+    memcpy( plaintext , *fNb , NONCELEN );
 
+    // Log the f(Nb) we are sending
+    fprintf( log , "Amal is sending this f( Nb ) in MSG5:\n" );
+    BIO_dump_indent_fp( log , (const char *)plaintext , (int)NONCELEN , 4 );
+    fprintf( log , "\n" );
+
+    //--------------------------------------------------------------------------
+    // 2) Encrypt plaintext with session key Ks -> ciphertext[]
+    //--------------------------------------------------------------------------
+    unsigned lenCipher =
+        encrypt( plaintext , (unsigned)NONCELEN ,
+                 Ks->key , Ks->iv , ciphertext );
+
+    if( lenCipher == 0 || lenCipher > CIPHER_LEN_MAX )
+    {
+        fprintf( log ,
+                 "Encryption of MSG5 failed or produced invalid length %u in MSG5_new()\n",
+                 lenCipher );
+        fflush( log );  fclose( log );
+        exitError( "Encryption failed in MSG5_new()" );
+    }
+
+    size_t LenMSG5cipher = (size_t)lenCipher;
+
+    //--------------------------------------------------------------------------
+    // 3) Allocate buffer for caller and copy encrypted MSG5
+    //--------------------------------------------------------------------------
+    *msg5 = (uint8_t *)malloc( LenMSG5cipher );
+    if( *msg5 == NULL )
+    {
+        fprintf( log ,
+                 "Out of Memory allocating %lu bytes for MSG5 in MSG5_new()\n",
+                 (unsigned long)LenMSG5cipher );
+        fflush( log );  fclose( log );
+        exitError( "Out of Memory allocating MSG5 in MSG5_new()" );
+    }
+
+    memcpy( *msg5 , ciphertext , LenMSG5cipher );
+
+    //--------------------------------------------------------------------------
+    // 4) Log encrypted MSG5
+    //--------------------------------------------------------------------------
+    fprintf( log ,
+             "The following Encrypted MSG5 ( %lu bytes ) has been"
+             " created by MSG5_new ():  \n" ,
+             (unsigned long)LenMSG5cipher );
+    BIO_dump_indent_fp( log , (const char *)*msg5 , (int)LenMSG5cipher , 4 );
+    fprintf( log , "\n" );
+    fflush( log );
+
+    return LenMSG5cipher;
 }
 
 //-----------------------------------------------------------------------------
 // Receive Message 5 by Basim from Amal
 // Parse the incoming msg5 into the value fNb
-
-void  MSG5_receive( FILE *log , int fd , const myKey_t *Ks , Nonce_t *fNb )
+//-----------------------------------------------------------------------------
+void MSG5_receive( FILE *log , int fd , const myKey_t *Ks , Nonce_t *fNb )
 {
-
-    // size_t    LenMSG5cipher ;
-    
-    // Read Len( Msg5 ) followed by reading Msg5 itself
-    // Always make sure read() and write() succeed
-    // Use the global scratch buffer ciphertext[] to receive encrypted MSG5.
-    // Make sure it fits.
-
-
-    // fprintf( log ,"The following Encrypted MSG5 ( %lu bytes ) has been received:\n" , LenMSG5cipher );
-
-
-    // Now, Decrypt MSG5 using Ks
-    // Use the global scratch buffer decryptext[] to collect the results of decryption
-    // Make sure it fits
-
-
-    // Parse MSG5 into its components f( Nb )
-
-
-    // *** TEMP STUB ***
-    (void)fd;
-    (void)Ks;
-    (void)fNb;
-
-    if (log) {
-        fprintf(log,
-                "MSG5_receive() STUB CALLED – not implemented yet (ignored for MSG2 tests).\n");
-        fflush(log);
+    // Guard against NULL pointers
+    if (log == NULL || Ks == NULL || fNb == NULL) {
+        if (log)
+            fprintf(log, "NULL pointer argument passed to MSG5_receive()\n");
+        exitError("NULL pointer argument passed to MSG5_receive()");
     }
 
+    size_t LenMSG5cipher = 0;
 
+    // 1) Read Len(MSG5)
+    if (read(fd, &LenMSG5cipher, sizeof(size_t)) != (ssize_t)sizeof(size_t)) {
+        fprintf(log,
+                "Unable to receive all %lu bytes of Len(MSG5) "
+                "in MSG5_receive() ... EXITING\n",
+                (unsigned long)sizeof(size_t));
+        fflush(log); fclose(log);
+        exitError("Unable to receive Len(MSG5) in MSG5_receive()");
+    }
 
+    // Sanity check
+    if (LenMSG5cipher > CIPHER_LEN_MAX) {
+        fprintf(log,
+                "Encrypted MSG5 length %lu exceeds CIPHER_LEN_MAX (%d)\n",
+                (unsigned long)LenMSG5cipher, CIPHER_LEN_MAX);
+        fflush(log); fclose(log);
+        exitError("Encrypted MSG5 too large in MSG5_receive()");
+    }
+
+    // 2) Read encrypted MSG5 into global ciphertext[]
+    if (read(fd, ciphertext, LenMSG5cipher) != (ssize_t)LenMSG5cipher) {
+        fprintf(log,
+                "Unable to receive all %lu bytes of MSG5 "
+                "in MSG5_receive() ... EXITING\n",
+                (unsigned long)LenMSG5cipher);
+        fflush(log); fclose(log);
+        exitError("Unable to receive MSG5 in MSG5_receive()");
+    }
+
+    fprintf(log,
+            "The following Encrypted MSG5 ( %lu bytes ) has been received:\n",
+            (unsigned long)LenMSG5cipher);
+    BIO_dump_indent_fp(log, (const char *)ciphertext, (int)LenMSG5cipher, 4);
+    fprintf(log, "\n");
+    fflush(log);
+
+    // 3) Decrypt MSG5 using Ks  -> decryptext[]
+    unsigned LenPlain = decrypt(
+        ciphertext,
+        (unsigned)LenMSG5cipher,
+        Ks->key,
+        Ks->iv,
+        decryptext
+    );
+
+    if (LenPlain == 0 || LenPlain > PLAINTEXT_LEN_MAX) {
+        fprintf(log,
+                "Decryption of MSG5 failed or produced invalid length %u\n",
+                LenPlain);
+        fflush(log); fclose(log);
+        exitError("Decryption failed in MSG5_receive()");
+    }
+
+    if (LenPlain < NONCELEN) {
+        fprintf(log,
+                "Plaintext MSG5 too short (%u bytes) for f(Nb) (%lu bytes)\n",
+                LenPlain, (unsigned long)NONCELEN);
+        fflush(log); fclose(log);
+        exitError("Bad MSG5 format in MSG5_receive()");
+    }
+
+    // 4) Parse MSG5 into its component: f(Nb)
+    memcpy(*fNb, decryptext, NONCELEN);
+
+    fprintf(log, "Basim received this f( Nb ) in MSG5:\n");
+    BIO_dump_indent_fp(log, (const char *)*fNb, (int)NONCELEN, 4);
+    fprintf(log, "\n");
+    fflush(log);
 }
 
 //-----------------------------------------------------------------------------
