@@ -387,14 +387,14 @@ size_t MSG1_new ( FILE *log , uint8_t **msg1 , const char *IDa , const char *IDb
   uint8_t *p = *msg1;
 
     // Fill message: Len(A) || A || Len(B) || B || Na
-    memcpy(p, &LenA, sizeof(size_t));
-    p += sizeof(size_t);
+    memcpy(p, &LenA, LENSIZE);
+    p += LENSIZE;
 
     memcpy(p, IDa, LenA);
     p += LenA;
 
-    memcpy(p, &LenB, sizeof(size_t));
-    p += sizeof(size_t);
+    memcpy(p, &LenB, LENSIZE);
+    p += LENSIZE;
 
     memcpy(p, IDb, LenB);
     p += LenB;
@@ -563,15 +563,15 @@ size_t MSG2_new( FILE *log , uint8_t **msg2, const myKey_t *Ka , const myKey_t *
     p += INITVECTOR_LEN;
 
     // Copy L(IDa) and advance p
-    memcpy(p, &lenIDa, sizeof(size_t));
-    p += sizeof(size_t);
+    memcpy(p, &lenIDa, LENSIZE);
+    p += LENSIZE;
 
     // Copy IDa and advance p
     memcpy(p, IDa, lenIDa);
     p += lenIDa;
 
     // Define ticket plaintxt length
-    size_t tktPlainLen = (size_t)(p - plaintext);
+    size_t tktPlainLen =  KEYSIZE + LENSIZE + lenIDa ;
 
     // Log plaintxt ticket
     fprintf(log, "Plaintext Ticket (%lu Bytes) is\n", (unsigned long)tktPlainLen);
@@ -606,8 +606,8 @@ size_t MSG2_new( FILE *log , uint8_t **msg2, const myKey_t *Ka , const myKey_t *
 
     // Copy L(IDb) and advance p
     size_t LenB = strlen(IDb) + 1;
-    memcpy(p, &LenB, sizeof(size_t));
-    p += sizeof(size_t);
+    memcpy(p, &LenB, LENSIZE);
+    p += LENSIZE;
 
     // Copy IDb and advance p
     p_IDb = p;
@@ -620,8 +620,8 @@ size_t MSG2_new( FILE *log , uint8_t **msg2, const myKey_t *Ka , const myKey_t *
     p += NONCELEN;
 
     // Copy L(TktCipher) and advance p
-    memcpy(p, &LenTktCipher, sizeof(size_t));
-    p += sizeof(size_t);
+    memcpy(p, &LenTktCipher, LENSIZE);
+    p += LENSIZE;
 
     // Copy encrypted ticket and advance p
     p_TktCipher = p;
@@ -629,7 +629,7 @@ size_t MSG2_new( FILE *log , uint8_t **msg2, const myKey_t *Ka , const myKey_t *
     p += LenTktCipher;
 
     // Define entire msg2 plaintxt length
-    LenMsg2Plain = (size_t)(p - plaintext);
+    LenMsg2Plain = KEYSIZE + LENSIZE + LenB + NONCELEN + LENSIZE + LenTktCipher;
 
     //------------------------------------------------------------------
     // 3) Encrypt Msg2 plaintext with Ka -> ciphertext2[]
@@ -717,11 +717,11 @@ void MSG2_receive( FILE *log , int fd , const myKey_t *Ka , myKey_t *Ks, char **
     size_t  LenMsg2 = 0 ;
 
     // 1) Read Len(MSG2)
-    if( read( fd , &LenMsg2 , sizeof(size_t) ) != (ssize_t)sizeof(size_t) )
+    if( read( fd , &LenMsg2 , LENSIZE ) != (ssize_t)LENSIZE )
     {
         fprintf( log , "Unable to receive all %lu bytes of Len(MSG2) "
                        "in MSG2_receive() ... EXITING\n" ,
-                 (unsigned long)sizeof(size_t) );
+                 (unsigned long)LENSIZE );
         fflush( log );  fclose( log );
         exitError( "Unable to receive Len(MSG2) in MSG2_receive()" );
     }
@@ -782,15 +782,15 @@ void MSG2_receive( FILE *log , int fd , const myKey_t *Ka , myKey_t *Ks, char **
     p += INITVECTOR_LEN;
 
     // L(IDb)
-    if( (size_t)(p_end - p) < sizeof(size_t) )
+    if( (size_t)(p_end - p) < LENSIZE )
     {
         fprintf( log , "MSG2 plaintext too short for Len(IDb) in MSG2_receive()\n" );
         fflush( log );  fclose( log );
         exitError( "Bad MSG2 format (LenB)" );
     }
     size_t LenB = 0 ;
-    memcpy( &LenB , p , sizeof(size_t) );
-    p += sizeof(size_t);
+    memcpy( &LenB , p , LENSIZE );
+    p += LENSIZE;
 
     if( (size_t)(p_end - p) < LenB )
     {
@@ -824,15 +824,15 @@ void MSG2_receive( FILE *log , int fd , const myKey_t *Ka , myKey_t *Ks, char **
     p += NONCELEN;
 
     // L(TktCipher)
-    if( (size_t)(p_end - p) < sizeof(size_t) )
+    if( (size_t)(p_end - p) < LENSIZE )
     {
         fprintf( log , "MSG2 plaintext too short for Len(TktCipher) in MSG2_receive()\n" );
         fflush( log );  fclose( log );
         exitError( "Bad MSG2 format (LenTktCipher)" );
     }
     size_t tLen = 0 ;
-    memcpy( &tLen , p , sizeof(size_t) );
-    p += sizeof(size_t);
+    memcpy( &tLen , p , LENSIZE );
+    p += LENSIZE;
 
     if( (size_t)(p_end - p) < tLen )
     {
@@ -1047,7 +1047,7 @@ void MSG3_receive( FILE *log , int fd , const myKey_t *Kb , myKey_t *Ks , char *
     p += INITVECTOR_LEN;
 
     // Extract L(IDa)
-    if( (size_t)(p_end - p) < sizeof(size_t) )
+    if( (size_t)(p_end - p) < LENSIZE )
     {
         fprintf( log , "Decrypted Ticket too short for Len(IDa) in MSG3_receive()\n" );
         fflush( log );  fclose( log );
@@ -1055,8 +1055,8 @@ void MSG3_receive( FILE *log , int fd , const myKey_t *Kb , myKey_t *Ks , char *
     }
 
     size_t LenA = 0;
-    memcpy( &LenA , p , sizeof(size_t) );
-    p += sizeof(size_t);
+    memcpy( &LenA , p , LENSIZE );
+    p += LENSIZE;
 
     // Extract IDa string
     if( (size_t)(p_end - p) < LenA )
@@ -1137,7 +1137,7 @@ size_t MSG4_new( FILE *log , uint8_t **msg4, const myKey_t *Ks , Nonce_t *fNa2 ,
     memcpy( p , *Nb , NONCELEN );
     p += NONCELEN;
 
-    size_t LenMsg4Plain = (size_t)(p - plaintext);
+    size_t LenMsg4Plain = NONCELEN + NONCELEN ;
 
     // Log the nonces being sent
     fprintf( log , "Basim is sending this f( Na2 ) in MSG4:\n" );
@@ -1208,12 +1208,12 @@ void MSG4_receive( FILE *log , int fd ,
     //----------------------------------------------------------
     size_t LenMsg4 = 0;
 
-    if( read( fd , &LenMsg4 , sizeof(size_t) ) != (ssize_t)sizeof(size_t) )
+    if( read( fd , &LenMsg4 , LENSIZE ) != (ssize_t)LENSIZE )
     {
         fprintf( log ,
                  "Unable to receive all %lu bytes of Len(MSG4) "
                  "in MSG4_receive() ... EXITING\n",
-                 (unsigned long)sizeof(size_t) );
+                 (unsigned long)LENSIZE );
         fflush( log );  fclose( log );
         exitError( "Unable to receive Len(MSG4) in MSG4_receive()" );
     }
@@ -1386,11 +1386,11 @@ void MSG5_receive( FILE *log , int fd , const myKey_t *Ks , Nonce_t *fNb )
     size_t LenMSG5cipher = 0;
 
     // 1) Read Len(MSG5)
-    if (read(fd, &LenMSG5cipher, sizeof(size_t)) != (ssize_t)sizeof(size_t)) {
+    if (read(fd, &LenMSG5cipher, LENSIZE) != (ssize_t)LENSIZE) {
         fprintf(log,
                 "Unable to receive all %lu bytes of Len(MSG5) "
                 "in MSG5_receive() ... EXITING\n",
-                (unsigned long)sizeof(size_t));
+                (unsigned long)LENSIZE);
         fflush(log); fclose(log);
         exitError("Unable to receive Len(MSG5) in MSG5_receive()");
     }
@@ -1448,6 +1448,7 @@ void MSG5_receive( FILE *log , int fd , const myKey_t *Ks , Nonce_t *fNb )
 
     // 4) Parse MSG5 into its component: f(Nb)
     memcpy(*fNb, decryptext, NONCELEN);
+
     fflush(log);
 }
 
