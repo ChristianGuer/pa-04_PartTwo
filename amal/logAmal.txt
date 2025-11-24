@@ -85,6 +85,19 @@ Amal sent message 3 ( 92 bytes ) to Basim
 ***************************************************
          MSG4 Receive
 ***************************************************
+The following Encrypted MSG4 ( 16 bytes ) was received:
+    0000 - e3 39 ea e1 38 6b 50 8d-42 25 dc 41 18 8f 2b 37   .9..8kP.B%.A..+7
+
+
+Amal is expecting back this f( Na2 ) in MSG4:
+    0000 - dd cc bb ab                                       ....
+
+Basim returned the following f( Na2 )   >>>> VALID
+    0000 - dd cc bb ab                                       ....
+
+Amal also received this Nb :
+    0000 - 99 88 77 66                                       ..wf
+
 ***************************************************
          MSG5 New
 ***************************************************

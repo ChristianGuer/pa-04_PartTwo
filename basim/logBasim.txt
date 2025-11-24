@@ -52,3 +52,12 @@ Basim is sending this nonce Nb in MSG4:
 The following Encrypted MSG4 ( 16 bytes ) has been created by MSG4_new ():  
     0000 - e3 39 ea e1 38 6b 50 8d-42 25 dc 41 18 8f 2b 37   .9..8kP.B%.A..+7
 
+Basim Sent the above MSG4 to Amal
+
+***************************************************
+         MSG5 Receive
+***************************************************
+Basim is expecting back this f( Nb ) in MSG5:
+    0000 - 99 88 77 67                                       ..wg
+
+Unable to read all 8 bytes of LenMSG5cipher from FD 7 in MSG5_receive() ... EXITING

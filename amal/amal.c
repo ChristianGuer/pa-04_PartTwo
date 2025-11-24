@@ -201,7 +201,7 @@ int main ( int argc , char * argv[] )
     fprintf(log , "    Na2 in Message 3:\n" );
     BIO_dump_indent_fp( log, Na2 , NONCELEN , 4);
     fprintf( log , "\n") ;
-    
+
     size_t lenMsg3 ;
     uint8_t *msg3;
     lenMsg3 = MSG3_new( log, &msg3, lenTktCipher, tktCipher, &Na2 );
@@ -217,17 +217,43 @@ int main ( int argc , char * argv[] )
         }
         off += (size_t)n;
     }
-    fprintf( log , "Amal sent message 3 ( %lu bytes ) to Basim\n\n" , lenMsg3 ) ;
+    fprintf( log , "Amal Sent Message 3 ( %lu bytes ) to Basim\n\n" , lenMsg3 ) ;
     fflush( log ) ;
-
-
     //*************************************
     // Receive   & Process Message 4
     //*************************************
-	// PA-04 Part Two
-    BANNER( log ) ;
+    BANNER( log );
     fprintf( log , "         MSG4 Receive\n");
-    BANNER( log ) ;
+    BANNER( log );
+
+    Nonce_t rcvd_fNa2;   // f(Na2) from Basim
+    Nonce_t Nb;          // Basim's nonce
+
+    MSG4_receive( log, fd_B2A, &Ks, &rcvd_fNa2, &Nb );
+    Nonce_t expected_fNa2;
+    fNonce( expected_fNa2 , Na2 );   // <-- result first, input second
+
+    fprintf( log , "Amal is expecting back this f( Na2 ) in MSG4:\n" );
+    BIO_dump_indent_fp( log , (const char *)expected_fNa2 , NONCELEN , 4 );
+    fprintf( log , "\n" );
+
+    // Compare byte-for-byte
+    if( memcmp( rcvd_fNa2 , expected_fNa2 , NONCELEN ) == 0 )
+    {
+        fprintf( log , "Basim returned the following f( Na2 )   >>>> VALID\n" );
+    }
+    else
+    {
+        fprintf( log , "Basim returned the following f( Na2 )   >>>> FAILED\n" );
+    }
+    BIO_dump_indent_fp( log , (const char *)rcvd_fNa2 , NONCELEN , 4 );
+    fprintf( log , "\n" );
+
+    fprintf( log , "Amal also received this Nb :\n" );
+    BIO_dump_indent_fp( log , (const char *)Nb , NONCELEN , 4 );
+    fprintf( log , "\n" );
+
+    fflush( log );
 
     //*************************************
     // Construct & Send    Message 5

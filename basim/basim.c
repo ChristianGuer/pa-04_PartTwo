@@ -112,18 +112,8 @@ int main ( int argc , char * argv[] )
     char    *IDa ;     // out: dynamically allocated IDa string
     Nonce_t   Na2 ;    // out: Na2 echoed back
     MSG3_receive( log, fd_A2B, &Kb, &Ks, &IDa, &Na2);
-    fprintf( log , "Basim received Message 3 from Amal with the following content\n"
-                    "    Ks { key , IV } (%lu Bytes ) is:\n", KEYSIZE ) ;
-    BIO_dump_indent_fp( log , (const char*)Ks.key , SYMMETRIC_KEY_LEN , 4 );
-    fprintf( log , "\n" );
-	BIO_dump_indent_fp( log , (const char*)Ks.iv  , INITVECTOR_LEN   , 4 );
-    fprintf( log , "\n" );
 
-    fprintf( log , "    IDa = '%s'\n" , IDa ) ;
-    fprintf( log , "    Na2 ( %lu Bytes ) is:\n" , NONCELEN ) ;
-    BIO_dump_indent_fp( log , (const char*)Na2 , NONCELEN , 4 );
-    fprintf( log , "\n" ) ;
-    fflush( log ) ;
+
     //*************************************
     // Construct & Send    Message 4
     //*************************************
@@ -131,6 +121,24 @@ int main ( int argc , char * argv[] )
     BANNER( log ) ;
     fprintf( log , "         MSG4 New\n");
     BANNER( log ) ;
+    Nonce_t fNa2;
+    fNonce( fNa2, Na2 );   // r = n + 1 (big-endian)
+    uint8_t *msg4;
+    size_t LenMsg4 = MSG4_new( log, &msg4, &Ks, &fNa2, &Nb );
+
+    // Send MSG4 to Amal via the appropriate pipe
+    size_t  off = 0 ;
+    const uint8_t *p = msg4 ;
+    while ( off < LenMsg4 ) {
+        ssize_t n = write( fd_B2A, p + off, LenMsg4 - off );
+        if ( n < 0 ) {
+            fprintf( log , "Basim: Unable to send all %lu bytes of MSG4 to Amal ... EXITING\n" , LenMsg4 );
+            fflush( log ) ;  fclose( log ) ;   
+            exitError( "Basim: Unable to send all bytes of MSG4 to Amal" );
+        }
+        off += (size_t)n;
+    }
+    fprintf( log , "Basim Sent the above MSG4 to Amal\n\n");
 
     //*************************************
     // Receive   & Process Message 5

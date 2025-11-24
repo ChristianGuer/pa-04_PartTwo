@@ -930,6 +930,12 @@ size_t MSG3_new( FILE *log , uint8_t **msg3 , const size_t lenTktCipher , const 
 // The buffers for Kb, Ks, and Na2 are pre-created by the caller
 // The value of Kb is set by the caller
 // The buffer for IDA is to be allocated here into *IDa
+//-----------------------------------------------------------------------------
+// Receive Message #3 by Basim from Amal
+// Parse the incoming msg3 into its components Ks , IDa , and Na2
+// The buffers for Kb, Ks, and Na2 are pre-created by the caller
+// The value of Kb is set by the caller
+// The buffer for IDA is to be allocated here into *IDa
 
 void MSG3_receive( FILE *log , int fd , const myKey_t *Kb , myKey_t *Ks , char **IDa , Nonce_t *Na2 )
 {
@@ -1021,6 +1027,9 @@ void MSG3_receive( FILE *log , int fd , const myKey_t *Kb , myKey_t *Ks , char *
     uint8_t *p     = decryptext;
     uint8_t *p_end = decryptext + lenTktPlain;
 
+    uint8_t *p_Ks  = NULL;
+    uint8_t *p_IDa = NULL;
+
     // Extract Ks { key || IV }
     if( (size_t)(p_end - p) < KEYSIZE )
     {
@@ -1028,6 +1037,9 @@ void MSG3_receive( FILE *log , int fd , const myKey_t *Kb , myKey_t *Ks , char *
         fflush( log );  fclose( log );
         exitError( "Bad Ticket format (Ks) in MSG3_receive()" );
     }
+
+    // Remember where Ks lives in the decrypted ticket for logging
+    p_Ks = p;
 
     memcpy( Ks->key , p , SYMMETRIC_KEY_LEN );
     p += SYMMETRIC_KEY_LEN;
@@ -1064,14 +1076,30 @@ void MSG3_receive( FILE *log , int fd , const myKey_t *Kb , myKey_t *Ks , char *
         exitError( "Out of memory for IDa in MSG3_receive()" );
     }
 
+    // Remember where IDa lives in the decrypted ticket for logging
+    p_IDa = p;
+
     memcpy( *IDa , p , LenA );
     p += LenA;
 
     // (optional) ensure null-terminated if you expect it:
     // (*IDa)[LenA - 1] = '\0';
 
-    // Done: Ks, IDa, and Na2 are now populated.
-    // Any extra logging about Ks / IDa / Na2 can be added here if your spec requires it.
+    // --------- Logging like MSG2_receive ---------
+
+    fprintf( log ,
+             "Basim received Message 3 from Amal with the following content:\n"
+             "   Ks { Key , IV } (%lu Bytes ) is:\n",
+             (unsigned long)KEYSIZE );
+    BIO_dump_indent_fp( log , (const char *)p_Ks , (int)KEYSIZE , 4 );
+    fprintf( log , "\n" );
+
+    fprintf( log , "    IDa = '%s'\n" , p_IDa ) ;
+    fprintf( log , "    Na2 ( %lu Bytes ) is:\n" , NONCELEN ) ;
+    BIO_dump_indent_fp( log , (const char*)Na2 , NONCELEN , 4 );
+    fprintf( log , "\n" ) ;
+    fflush( log ) ;
+
 }
 
 //-----------------------------------------------------------------------------
@@ -1081,70 +1109,183 @@ void MSG3_receive( FILE *log , int fd , const myKey_t *Kb , myKey_t *Ks , char *
 // All other arguments have been initialized by caller
 
 // Returns the size of Message #4 after being encrypted by Ks in bytes
+//-----------------------------------------------------------------------------
+// Build a new Message #4 from Basim to Amal
+// MSG4 = Encrypt( Ks ,  { fNa2 ||  Nb }   )
+// A new buffer for *msg4 is allocated here
+// All other arguments have been initialized by caller
+//
+// Returns the size of Message #4 after being encrypted by Ks in bytes
 
-size_t  MSG4_new( FILE *log , uint8_t **msg4, const myKey_t *Ks , Nonce_t *fNa2 , Nonce_t *Nb )
+size_t MSG4_new( FILE *log , uint8_t **msg4, const myKey_t *Ks , Nonce_t *fNa2 , Nonce_t *Nb )
 {
-
-    size_t LenMsg4 ;
-
-    // Construct MSG4 Plaintext = { f(Na2)  ||  Nb }
-    // Use the global scratch buffer plaintext[] for MSG4 plaintext and fill it in with component values
-
-
-
-    // Now, encrypt MSG4 plaintext using the session key Ks;
-    // Use the global scratch buffer ciphertext[] to collect the result. Make sure it fits.
-
-    // Now allocate a buffer for the caller, and copy the encrypted MSG4 to it
-    // *msg4 = malloc( .... ) ;
-
-
-
-    
-    // fprintf( log , "The following Encrypted MSG4 ( %lu bytes ) has been"
-    //                " created by MSG4_new ():  \n" , LenMsg4 ) ;
-    // BIO_dump_indent_fp( log , *msg4 , ... ) ;
-
-    // return LenMsg4 ;
-
-    // *** TEMP STUB ***
-    (void)Ks;
-    (void)fNa2;
-    (void)Nb;
-
-    if (msg4) {
-        *msg4 = NULL;
+    // Guard against NULL pointers
+    if( log == NULL || msg4 == NULL || Ks == NULL || fNa2 == NULL || Nb == NULL )
+    {
+        if( log )
+            fprintf( log , "NULL pointer argument passed to MSG4_new()\n" );
+        exitError( "NULL pointer argument passed to MSG4_new()" );
     }
 
-    if (log) {
-        fprintf(log,
-                "MSG4_new() STUB CALLED – not implemented yet (ignored for MSG2 tests).\n");
-        fflush(log);
+    // 1) Build MSG4 plaintext in global plaintext[]
+    //    MSG4_plain = { f(Na2) || Nb }
+    uint8_t *p = plaintext;
+
+    memcpy( p , *fNa2 , NONCELEN );
+    p += NONCELEN;
+
+    memcpy( p , *Nb , NONCELEN );
+    p += NONCELEN;
+
+    size_t LenMsg4Plain = (size_t)(p - plaintext);
+
+    // Log the nonces being sent
+    fprintf( log , "Basim is sending this f( Na2 ) in MSG4:\n" );
+    BIO_dump_indent_fp( log , (const char *)*fNa2 , (int)NONCELEN , 4 );
+    fprintf( log , "\n" );
+
+    fprintf( log , "Basim is sending this nonce Nb in MSG4:\n" );
+    BIO_dump_indent_fp( log , (const char *)*Nb , (int)NONCELEN , 4 );
+    fprintf( log , "\n" );
+
+    // 2) Encrypt MSG4 plaintext using the session key Ks into global ciphertext[]
+    unsigned cipherLen = encrypt(plaintext,(unsigned)LenMsg4Plain,
+        Ks->key, Ks->iv,ciphertext
+    );
+
+    if( cipherLen == 0 || cipherLen > CIPHER_LEN_MAX )
+    {
+        fprintf( log ,
+                 "Encryption of MSG4 failed or produced invalid length %u in MSG4_new()\n",
+                 cipherLen );
+        fflush( log );  fclose( log );
+        exitError( "Encryption failed in MSG4_new()" );
     }
 
-    return 0;
-    
+    size_t LenMsg4 = (size_t)cipherLen;
 
+    // 3) Allocate buffer for caller and copy ciphertext
+    *msg4 = (uint8_t *)malloc( LenMsg4 );
+    if( *msg4 == NULL )
+    {
+        fprintf( log ,
+                 "Out of memory allocating %lu bytes for MSG4 in MSG4_new()\n",
+                 (unsigned long)LenMsg4 );
+        fflush( log );  fclose( log );
+        exitError( "Out of memory allocating MSG4 in MSG4_new()" );
+    }
+
+    memcpy( *msg4 , ciphertext , LenMsg4 );
+
+    // 4) Log encrypted MSG4
+    fprintf( log ,
+             "The following Encrypted MSG4 ( %lu bytes ) has been"
+             " created by MSG4_new ():  \n",
+             (unsigned long)LenMsg4 );
+    BIO_dump_indent_fp( log , (const char *)*msg4 , (int)LenMsg4 , 4 );
+    fprintf( log , "\n" );
+    fflush( log );
+
+    return LenMsg4;
 }
 
 //-----------------------------------------------------------------------------
 // Receive Message #4 by Amal from Basim
 // Parse the incoming encrypted msg4 into the values rcvd_fNa2 and Nb
 
-void  MSG4_receive( FILE *log , int fd , const myKey_t *Ks , Nonce_t *rcvd_fNa2 , Nonce_t *Nb )
+void MSG4_receive( FILE *log , int fd ,
+                   const myKey_t *Ks , Nonce_t *rcvd_fNa2 , Nonce_t *Nb )
 {
-    // *** TEMP STUB ***
-    (void)fd;
-    (void)Ks;
-    (void)rcvd_fNa2;
-    (void)Nb;
-
-    if (log) {
-        fprintf(log,
-                "MSG4_receive() STUB CALLED – not implemented yet (ignored for MSG2 tests).\n");
-        fflush(log);
+    if( log == NULL || Ks == NULL || rcvd_fNa2 == NULL || Nb == NULL )
+    {
+        if( log )
+            fprintf( log , "NULL pointer argument passed to MSG4_receive()\n" );
+        exitError( "NULL pointer argument passed to MSG4_receive()" );
     }
 
+    //----------------------------------------------------------
+    // 1) Read Len(MSG4) from the pipe
+    //----------------------------------------------------------
+    size_t LenMsg4 = 0;
+
+    if( read( fd , &LenMsg4 , sizeof(size_t) ) != (ssize_t)sizeof(size_t) )
+    {
+        fprintf( log ,
+                 "Unable to receive all %lu bytes of Len(MSG4) "
+                 "in MSG4_receive() ... EXITING\n",
+                 (unsigned long)sizeof(size_t) );
+        fflush( log );  fclose( log );
+        exitError( "Unable to receive Len(MSG4) in MSG4_receive()" );
+    }
+
+    if( LenMsg4 > CIPHER_LEN_MAX )
+    {
+        fprintf( log ,
+                 "Encrypted MSG4 is too big %lu bytes( max is %d ) in MSG4_receive()  ... EXITING\n",
+                 (unsigned long)LenMsg4 , CIPHER_LEN_MAX );
+        fflush( log );  fclose( log );
+        exitError( "Encrypted MSG4 too large in MSG4_receive()" );
+    }
+
+    //----------------------------------------------------------
+    // 2) Read encrypted MSG4 into global ciphertext[]
+    //----------------------------------------------------------
+    if( read( fd , ciphertext , LenMsg4 ) != (ssize_t)LenMsg4 )
+    {
+        fprintf( log ,
+                 "Unable to receive all %lu bytes of MSG4 in MSG4_receive() "
+                 "... EXITING\n",
+                 (unsigned long)LenMsg4 );
+        fflush( log );  fclose( log );
+        exitError( "Unable to receive MSG4 in MSG4_receive()" );
+    }
+
+    fprintf( log ,
+             "The following Encrypted MSG4 ( %lu bytes ) was received:\n",
+             (unsigned long)LenMsg4 );
+    BIO_dump_indent_fp( log , (const char *)ciphertext , (int)LenMsg4 , 4 );
+    fprintf( log , "\n\n" );      // one blank line after dump
+    fflush( log );
+
+    //----------------------------------------------------------
+    // 3) Decrypt MSG4 with session key Ks into decryptext[]
+    //----------------------------------------------------------
+    unsigned LenPlain =
+        decrypt( ciphertext , (unsigned)LenMsg4 ,
+                 Ks->key , Ks->iv , decryptext );
+    if( LenPlain == 0 || LenPlain > PLAINTEXT_LEN_MAX )
+    {
+        fprintf( log ,
+                 "Decryption of MSG4 failed or produced invalid length %u\n",
+                 LenPlain );
+        fflush( log );  fclose( log );
+        exitError( "Decryption failed in MSG4_receive()" );
+    }
+
+    //----------------------------------------------------------
+    // 4) Parse plaintext:  f(Na2) || Nb
+    //----------------------------------------------------------
+    if( LenPlain < 2 * NONCELEN )
+    {
+        fprintf( log ,
+                 "MSG4 plaintext too short (%u bytes) in MSG4_receive()\n",
+                 LenPlain );
+        fflush( log );  fclose( log );
+        exitError( "Bad MSG4 format in MSG4_receive()" );
+    }
+
+    uint8_t *p = decryptext;
+
+    // f(Na2)
+    memcpy( *rcvd_fNa2 , p , NONCELEN );
+    p += NONCELEN;
+
+    // Nb
+    memcpy( *Nb , p , NONCELEN );
+    /* p += NONCELEN;  // not strictly needed afterwards */
+
+    // No extra logging here – Amal.c will log expected f(Na2),
+    // compare it to rcvd_fNa2, and dump Nb just like in the expected log.
 }
 
 //-----------------------------------------------------------------------------
