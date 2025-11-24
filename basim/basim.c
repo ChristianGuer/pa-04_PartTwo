@@ -73,7 +73,7 @@ int main ( int argc , char * argv[] )
     fprintf( log , "Starting Basim\n"  ) ;
     BANNER( log ) ;
 
-    fprintf( log , "\n<readFrom Amal> FD=%d , <sendTo Amal> FD=%d\n\n" , fd_A2B , fd_B2A );
+    fprintf( log , "\n<readFr. Amal> FD=%d , <sendTo Amal> FD=%d\n\n" , fd_A2B , fd_B2A );
 
     // Get Basim's master keys with the KDC
     myKey_t   Kb ;   
@@ -121,24 +121,48 @@ int main ( int argc , char * argv[] )
     BANNER( log ) ;
     fprintf( log , "         MSG4 New\n");
     BANNER( log ) ;
+
     Nonce_t fNa2;
     fNonce( fNa2, Na2 );   // r = n + 1 (big-endian)
-    uint8_t *msg4;
-    size_t LenMsg4 = MSG4_new( log, &msg4, &Ks, &fNa2, &Nb );
 
-    // Send MSG4 to Amal via the appropriate pipe
-    size_t  off = 0 ;
-    const uint8_t *p = msg4 ;
-    while ( off < LenMsg4 ) {
-        ssize_t n = write( fd_B2A, p + off, LenMsg4 - off );
-        if ( n < 0 ) {
-            fprintf( log , "Basim: Unable to send all %lu bytes of MSG4 to Amal ... EXITING\n" , LenMsg4 );
-            fflush( log ) ;  fclose( log ) ;   
-            exitError( "Basim: Unable to send all bytes of MSG4 to Amal" );
+    uint8_t *msg4 = NULL;
+    size_t LenMsg4 = MSG4_new( log, &msg4, &Ks, &fNa2, &Nb );
+    if (LenMsg4 == 0 || msg4 == NULL) {
+        fprintf(log, "Basim: MSG4_new failed\n");
+        fflush(log);
+        fclose(log);
+        exitError("Basim: MSG4_new failed");
+    }
+
+    /* 1) Send Len(MSG4) first */
+    if (write(fd_B2A, &LenMsg4, sizeof(size_t)) != (ssize_t)sizeof(size_t)) {
+        fprintf(log,
+                "Basim: Unable to send all %lu bytes of Len(MSG4) to Amal ... EXITING\n",
+                (unsigned long)sizeof(size_t));
+        fflush(log);
+        fclose(log);
+        exitError("Basim: Unable to send Len(MSG4) to Amal");
+    }
+
+    /* 2) Then send the encrypted MSG4 bytes */
+    size_t off = 0;
+    while (off < LenMsg4) {
+        ssize_t n = write(fd_B2A, msg4 + off, LenMsg4 - off);
+        if (n <= 0) {
+            fprintf(log,
+                    "Basim: Unable to send all %lu bytes of MSG4 to Amal ... EXITING\n",
+                    (unsigned long)LenMsg4);
+            fflush(log);
+            fclose(log);
+            exitError("Basim: Unable to send MSG4 to Amal");
         }
         off += (size_t)n;
     }
-    fprintf( log , "Basim Sent the above MSG4 to Amal\n\n");
+
+    fprintf(log, "Basim Sent the above MSG4 to Amal\n\n");
+    fflush(log);
+
+    // optionally: free(msg4);
 
     //*************************************
     // Receive   & Process Message 5
@@ -160,11 +184,11 @@ int main ( int argc , char * argv[] )
     // Compare byte-for-byte
     if( memcmp( rcvdfNb , expectedfNb , NONCELEN ) == 0 )
     {
-        fprintf( log , "Amal returned the following f( Nb )   >>>> VALID\n" );
+        fprintf( log , "Basim received Message 5 from Amal with this f( Nb ): >>>> VALID\n" );
     }
     else
     {
-        fprintf( log , "Amal returned the following f( Nb2 )   >>>> FAILED\n" );
+        fprintf( log , "Bsim received Message 5 from Amal with this f( Nb ): >>>> FAILED\n" );
     }
     BIO_dump_indent_fp( log , (const char *)rcvdfNb , NONCELEN , 4 );
     fprintf( log , "\n" );

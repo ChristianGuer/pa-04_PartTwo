@@ -1089,7 +1089,7 @@ void MSG3_receive( FILE *log , int fd , const myKey_t *Kb , myKey_t *Ks , char *
 
     fprintf( log ,
              "Basim received Message 3 from Amal with the following content:\n"
-             "   Ks { Key , IV } (%lu Bytes ) is:\n",
+             "    Ks { Key , IV } (%lu Bytes ) is:\n",
              (unsigned long)KEYSIZE );
     BIO_dump_indent_fp( log , (const char *)p_Ks , (int)KEYSIZE , 4 );
     fprintf( log , "\n" );
@@ -1448,10 +1448,6 @@ void MSG5_receive( FILE *log , int fd , const myKey_t *Ks , Nonce_t *fNb )
 
     // 4) Parse MSG5 into its component: f(Nb)
     memcpy(*fNb, decryptext, NONCELEN);
-
-    fprintf(log, "Basim received this f( Nb ) in MSG5:\n");
-    BIO_dump_indent_fp(log, (const char *)*fNb, (int)NONCELEN, 4);
-    fprintf(log, "\n");
     fflush(log);
 }
 

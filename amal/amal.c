@@ -189,6 +189,8 @@ int main ( int argc , char * argv[] )
 
     fflush( log );
 
+
+
     //*************************************
     // Construct & Send    Message 3
     //*************************************
@@ -219,6 +221,9 @@ int main ( int argc , char * argv[] )
     }
     fprintf( log , "Amal Sent the Message 3 ( %lu bytes ) to Basim\n\n" , lenMsg3 ) ;
     fflush( log ) ;
+
+
+
     //*************************************
     // Receive   & Process Message 4
     //*************************************
@@ -255,31 +260,59 @@ int main ( int argc , char * argv[] )
 
     fflush( log );
 
+
+
     //*************************************
     // Construct & Send    Message 5
     //*************************************
-	// PA-04 Part Two
+    // PA-04 Part Two
     BANNER( log ) ;
     fprintf( log , "         MSG5 New\n");
     BANNER( log ) ;
-    Nonce_t fNb;          // Basim's nonce
+
+    Nonce_t fNb;          // f(Nb) to prove liveness
     fNonce( fNb , Nb );   // r = n + 1 (big-endian)
+
     size_t   LenMsg5 ;
-    uint8_t *msg5 ;
+    uint8_t *msg5 = NULL ;
     LenMsg5 = MSG5_new( log , &msg5 , &Ks , &fNb ) ;
-    // Send MSG5 to Basim via the appropriate pipe
-    off = 0 ;
-    p = msg5 ;
-    while ( off < LenMsg5 ) {
-        ssize_t n = write( fd_A2B, p + off, LenMsg5 - off );
-        if ( n < 0 ) {
-            fprintf( log , "Amal: Unable to send all %lu bytes of MSG5 to Basim ... EXITING\n" , LenMsg5 );
-            fflush( log ) ;  fclose( log ) ;   
-            exitError( "Amal: Unable to send all bytes of MSG5 to Basim" );
+    if (LenMsg5 == 0 || msg5 == NULL) {
+        fprintf(log, "Amal: MSG5_new failed\n");
+        fflush(log);
+        fclose(log);
+        exitError("Amal: MSG5_new failed");
+    }
+
+    /* 1) Send Len(MSG5) first */
+    off = 0;
+    ssize_t n = write(fd_A2B, &LenMsg5, sizeof(size_t));
+    if (n != (ssize_t)sizeof(size_t)) {
+        fprintf(log,
+                "Amal: Unable to send all %lu bytes of Len(MSG5) to Basim ... EXITING\n",
+                (unsigned long)sizeof(size_t));
+        fflush(log); fclose(log);
+        exitError("Amal: Unable to send Len(MSG5) to Basim");
+    }
+
+    /* 2) Then send the encrypted MSG5 bytes */
+    off = 0;
+    p = msg5;
+    while (off < LenMsg5) {
+        n = write(fd_A2B, p + off, LenMsg5 - off);
+        if (n <= 0) {
+            fprintf(log,
+                    "Amal: Unable to send all %lu bytes of MSG5 to Basim ... EXITING\n",
+                    (unsigned long)LenMsg5);
+            fflush(log); fclose(log);
+            exitError("Amal: Unable to send all bytes of MSG5 to Basim");
         }
         off += (size_t)n;
     }
-    fprintf( log , "Amal sent Message 5 ( %lu bytes ) to Basim\n", LenMsg5 ) ;
+
+    fprintf( log , "Amal sent Message 5 ( %lu bytes ) to Basim\n", (unsigned long)LenMsg5 );
+    fflush(log);
+
+    // optionally: free(msg5);
 
     //*************************************   
     // Final Clean-Up
