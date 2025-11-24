@@ -196,6 +196,30 @@ int main ( int argc , char * argv[] )
     BANNER( log ) ;
     fprintf( log , "         MSG3 New\n");
     BANNER( log ) ;
+    //call MSG3_new to create a MSG3 to send to Basim
+    fprintf( log, "Amal is sending this to Basim in Message 3:\n" );
+    fprintf(log , "    Na2 in Message 3:\n" );
+    BIO_dump_indent_fp( log, Na2 , NONCELEN , 4);
+    fprintf( log , "\n") ;
+    
+    size_t lenMsg3 ;
+    uint8_t *msg3;
+    lenMsg3 = MSG3_new( log, &msg3, lenTktCipher, tktCipher, &Na2 );
+    // Send MSG3 to Basim via the appropriate pipe
+    off = 0 ;
+    p = msg3 ;
+    while ( off < lenMsg3 ) {
+        ssize_t n = write( fd_A2B, p + off, lenMsg3 - off );
+        if ( n < 0 ) {
+            fprintf( log , "Amal: Unable to send all %lu bytes of MSG3 to Basim ... EXITING\n" , lenMsg3 );
+            fflush( log ) ;  fclose( log ) ;   
+            exitError( "Amal: Unable to send all bytes of MSG3 to Basim" );
+        }
+        off += (size_t)n;
+    }
+    fprintf( log , "Amal sent message 3 ( %lu bytes ) to Basim\n\n" , lenMsg3 ) ;
+    fflush( log ) ;
+
 
     //*************************************
     // Receive   & Process Message 4

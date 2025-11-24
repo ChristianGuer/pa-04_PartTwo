@@ -895,31 +895,32 @@ size_t MSG3_new( FILE *log , uint8_t **msg3 , const size_t lenTktCipher , const 
                    const Nonce_t *Na2 )
 {
 
-    // size_t    LenMsg3 ;
-
-    // fprintf( log , "The following MSG3 ( %lu bytes ) has been created by "
-    //                "MSG3_new ():\n" , LenMsg3 ) ;
-    // BIO_dump_indent_fp( log , *msg3 , LenMsg3 , 4 ) ;    fprintf( log , "\n" ) ;    
-    // fflush( log ) ;    
-
-    // return( LenMsg3 ) ;
-
-    // *** TEMP STUB ***
-    (void)lenTktCipher;
-    (void)tktCipher;
-    (void)Na2;
-
-    if (msg3) {
-        *msg3 = NULL;
-    }
-
-    if (log) {
-        fprintf(log,
-                "MSG3_new() STUB CALLED – not implemented yet (ignored for MSG2 tests).\n");
+    size_t    LenMsg3 ;
+    // Construct MSG3 = {  L(TktCipher)  || TktCipher  ||  Na2  }
+    LenMsg3 = LENSIZE + lenTktCipher + NONCELEN ;
+    //allocate mem for msg3
+    *msg3 = (uint8_t *) malloc(LenMsg3);
+    if (*msg3 == NULL) {
+        fprintf(log, "Out of Memory allocating %lu bytes for MSG3 in MSG3_new()\n", LenMsg3);
+        exitError("Out of Memory allocating MSG3 in MSG3_new()");
         fflush(log);
     }
+    uint8_t *p = *msg3;
+    //fill msg3 = {  L(TktCipher)  || TktCipher  ||  Na2  }
+    memcpy(p, &lenTktCipher, LENSIZE);
+    p += LENSIZE;
+    memcpy(p, tktCipher, lenTktCipher);
+    p += lenTktCipher;
+    memcpy(p, *Na2, NONCELEN);
+    p += NONCELEN;
 
-    return 0;   // no bytes in stub
+
+    fprintf( log , "The following MSG3 ( %lu bytes ) has been created by "
+                    "MSG3_new ():\n" , LenMsg3 ) ;
+    BIO_dump_indent_fp( log , *msg3 , LenMsg3 , 4 ) ;    fprintf( log , "\n" ) ;    
+    fflush( log ) ;    
+
+    return( LenMsg3 ) ;
 
 }
 
@@ -932,36 +933,145 @@ size_t MSG3_new( FILE *log , uint8_t **msg3 , const size_t lenTktCipher , const 
 
 void MSG3_receive( FILE *log , int fd , const myKey_t *Kb , myKey_t *Ks , char **IDa , Nonce_t *Na2 )
 {
-
-
-
-    // fprintf( log ,"The following Encrypted TktCipher ( %lu bytes ) was received by MSG3_receive()\n" 
-    //              , ....  );
-    // BIO_dump_indent_fp( log , ciphertext , lenTktCipher , 4 ) ;   fprintf( log , "\n");
-    // fflush( log ) ;
-
-
-
-    // fprintf( log ,"Here is the Decrypted Ticket ( %lu bytes ) in MSG3_receive():\n" , lenTktPlain ) ;
-    // BIO_dump_indent_fp( log , decryptext , ..... , 4 ) ;   fprintf( log , "\n");
-    // fflush( log ) ;
-
-
-    // *** TEMP STUB ***
-    (void)fd;
-    (void)Kb;
-    (void)Ks;
-    (void)IDa;
-    (void)Na2;
-
-    if (log) {
-        fprintf(log,
-                "MSG3_receive() STUB CALLED – not implemented yet (ignored for MSG2 tests).\n");
-        fflush(log);
+    // Guard against NULL pointers
+    if( log == NULL || Kb == NULL || Ks == NULL || IDa == NULL || Na2 == NULL )
+    {
+        if( log )
+            fprintf( log , "NULL pointer argument passed to MSG3_receive()\n" );
+        exitError( "NULL pointer argument passed to MSG3_receive()" );
     }
 
+    size_t lenTktCipher = 0;
 
+    // 1) Read L(TktCipher) from the pipe
+    if( read( fd , &lenTktCipher , LENSIZE ) != (ssize_t)LENSIZE )
+    {
+        fprintf( log ,
+                 "Unable to receive all %lu bytes of lenTktCipher from FD %d "
+                 "in MSG3_receive() ... EXITING\n",
+                 (unsigned long)LENSIZE , fd );
+        fflush( log );  fclose( log );
+        exitError( "Unable to receive all bytes of lenTktCipher in MSG3_receive()" );
+    }
 
+    // Sanity-check length
+    if( lenTktCipher > CIPHER_LEN_MAX )
+    {
+        fprintf( log ,
+                 "Encrypted TktCipher is too big %lu bytes( max is %d ) "
+                 "in MSG3_receive()  ... EXITING\n",
+                 (unsigned long)lenTktCipher , CIPHER_LEN_MAX );
+        fflush( log );  fclose( log );
+        exitError( "Encrypted TktCipher too large in MSG3_receive()" );
+    }
+
+    // 2) Read TktCipher bytes into global ciphertext[]
+    if( read( fd , ciphertext , lenTktCipher ) != (ssize_t)lenTktCipher )
+    {
+        fprintf( log ,
+                 "Unable to receive all %lu bytes of TktCipher from FD %d "
+                 "in MSG3_receive() ... EXITING\n",
+                 (unsigned long)lenTktCipher , fd );
+        fflush( log );  fclose( log );
+        exitError( "Unable to receive all bytes of TktCipher in MSG3_receive()" );
+    }
+
+    // 3) Read Na2 (plaintext nonce)
+    if( read( fd , *Na2 , NONCELEN ) != (ssize_t)NONCELEN )
+    {
+        fprintf( log ,
+                 "Unable to receive all %lu bytes of Na2 from FD %d "
+                 "in MSG3_receive() ... EXITING\n",
+                 (unsigned long)NONCELEN , fd );
+        fflush( log );  fclose( log );
+        exitError( "Unable to receive all bytes of Na2 in MSG3_receive()" );
+    }
+
+    // Log the encrypted ticket
+    fprintf( log ,
+             "The following Encrypted TktCipher ( %lu bytes ) was received by MSG3_receive()\n",
+             (unsigned long)lenTktCipher );
+    BIO_dump_indent_fp( log , (const char *)ciphertext , (int)lenTktCipher , 4 );
+    fprintf( log , "\n" );
+    fflush( log );
+
+    // 4) Decrypt the ticket with Basim's master key Kb
+    unsigned lenTktPlain =
+        decrypt( ciphertext , (unsigned)lenTktCipher ,
+                 Kb->key , Kb->iv , decryptext );
+
+    if( lenTktPlain == 0 || lenTktPlain > PLAINTEXT_LEN_MAX )
+    {
+        fprintf( log ,
+                 "Decryption of Ticket in MSG3 failed or produced invalid length %u\n",
+                 lenTktPlain );
+        fflush( log );  fclose( log );
+        exitError( "Decryption failed in MSG3_receive()" );
+    }
+
+    // Log the decrypted ticket
+    fprintf( log ,
+             "Here is the Decrypted Ticket ( %lu bytes ) in MSG3_receive():\n",
+             (unsigned long)lenTktPlain );
+    BIO_dump_indent_fp( log , (const char *)decryptext , (int)lenTktPlain , 4 );
+    fprintf( log , "\n" );
+    fflush( log );
+
+    // 5) Parse TicketPlain = Ks || L(IDa) || IDa
+    uint8_t *p     = decryptext;
+    uint8_t *p_end = decryptext + lenTktPlain;
+
+    // Extract Ks { key || IV }
+    if( (size_t)(p_end - p) < KEYSIZE )
+    {
+        fprintf( log , "Decrypted Ticket too short for Ks in MSG3_receive()\n" );
+        fflush( log );  fclose( log );
+        exitError( "Bad Ticket format (Ks) in MSG3_receive()" );
+    }
+
+    memcpy( Ks->key , p , SYMMETRIC_KEY_LEN );
+    p += SYMMETRIC_KEY_LEN;
+    memcpy( Ks->iv  , p , INITVECTOR_LEN );
+    p += INITVECTOR_LEN;
+
+    // Extract L(IDa)
+    if( (size_t)(p_end - p) < sizeof(size_t) )
+    {
+        fprintf( log , "Decrypted Ticket too short for Len(IDa) in MSG3_receive()\n" );
+        fflush( log );  fclose( log );
+        exitError( "Bad Ticket format (Len(IDa)) in MSG3_receive()" );
+    }
+
+    size_t LenA = 0;
+    memcpy( &LenA , p , sizeof(size_t) );
+    p += sizeof(size_t);
+
+    // Extract IDa string
+    if( (size_t)(p_end - p) < LenA )
+    {
+        fprintf( log , "Decrypted Ticket too short for IDa in MSG3_receive()\n" );
+        fflush( log );  fclose( log );
+        exitError( "Bad Ticket format (IDa) in MSG3_receive()" );
+    }
+
+    *IDa = (char *)malloc( LenA );
+    if( *IDa == NULL )
+    {
+        fprintf( log ,
+                 "Out of memory allocating %lu bytes for IDa in MSG3_receive()\n",
+                 (unsigned long)LenA );
+        fflush( log );  fclose( log );
+        exitError( "Out of memory for IDa in MSG3_receive()" );
+    }
+
+    memcpy( *IDa , p , LenA );
+    p += LenA;
+
+    // (optional) ensure null-terminated if you expect it:
+    // (*IDa)[LenA - 1] = '\0';
+
+    // Done: Ks, IDa, and Na2 are now populated.
+    // Any extra logging about Ks / IDa / Na2 can be added here if your spec requires it.
 }
 
 //-----------------------------------------------------------------------------
@@ -975,10 +1085,11 @@ void MSG3_receive( FILE *log , int fd , const myKey_t *Kb , myKey_t *Ks , char *
 size_t  MSG4_new( FILE *log , uint8_t **msg4, const myKey_t *Ks , Nonce_t *fNa2 , Nonce_t *Nb )
 {
 
-    // size_t LenMsg4 ;
+    size_t LenMsg4 ;
 
     // Construct MSG4 Plaintext = { f(Na2)  ||  Nb }
     // Use the global scratch buffer plaintext[] for MSG4 plaintext and fill it in with component values
+
 
 
     // Now, encrypt MSG4 plaintext using the session key Ks;

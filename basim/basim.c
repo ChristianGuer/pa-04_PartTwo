@@ -108,7 +108,22 @@ int main ( int argc , char * argv[] )
     BANNER( log ) ;
     fprintf( log , "         MSG3 Receive\n");
     BANNER( log ) ;
+    myKey_t  Ks ;      // out: session key Ks
+    char    *IDa ;     // out: dynamically allocated IDa string
+    Nonce_t   Na2 ;    // out: Na2 echoed back
+    MSG3_receive( log, fd_A2B, &Kb, &Ks, &IDa, &Na2);
+    fprintf( log , "Basim received Message 3 from Amal with the following content\n"
+                    "    Ks { key , IV } (%lu Bytes ) is:\n", KEYSIZE ) ;
+    BIO_dump_indent_fp( log , (const char*)Ks.key , SYMMETRIC_KEY_LEN , 4 );
+    fprintf( log , "\n" );
+	BIO_dump_indent_fp( log , (const char*)Ks.iv  , INITVECTOR_LEN   , 4 );
+    fprintf( log , "\n" );
 
+    fprintf( log , "    IDa = '%s'\n" , IDa ) ;
+    fprintf( log , "    Na2 ( %lu Bytes ) is:\n" , NONCELEN ) ;
+    BIO_dump_indent_fp( log , (const char*)Na2 , NONCELEN , 4 );
+    fprintf( log , "\n" ) ;
+    fflush( log ) ;
     //*************************************
     // Construct & Send    Message 4
     //*************************************
